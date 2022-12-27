@@ -32,18 +32,28 @@ type Msg =
     NoOp
     | UpdateField String
     | Add
-    | UpdateItem (Int, Item.Msg)
-    -- | ItemsReceived (Result Http.Error (List Item.Model))
-    | ItemCreated (Result Http.Error Item.Model)
+    | UpdateItem (String, Item.Msg)
+    | ItemsReceived (Result Http.Error (List Item.Model))
+    | GetItems
 
 type alias Flags =
     Json.Encode.Value
+
+-- getItems: List Item.Model 
+getItems = 
+    Http.get
+        { url = "http://localhost:3000/todos"
+        , expect = Http.expectJson ItemsReceived Item.itemListDecoder
+        }
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model = 
     case msg of
         NoOp -> ( model, Cmd.none )
         
+        GetItems -> 
+            ( model, getItems )
+
         UpdateField value ->
             let 
                 newModel = { model | field = value }
@@ -64,7 +74,7 @@ update msg model =
                         { 
                             model | uuid = model.uuid + 1
                             , field = ""
-                            , tasks = model.tasks ++ [ Item.init description model.uuid ]
+                            , tasks = model.tasks ++ [ Item.init description (String.fromInt model.uuid) ]
                         }
 
             in ( newModel, httpCommand )
@@ -87,17 +97,18 @@ update msg model =
                     _ ->
                         ( newModel, Cmd.none )
 
-        -- ItemsReceived (Ok items) ->
-        --     ( { model | tasks = items }, Cmd.none )
-
-        -- ItemsReceived (Err _) ->
-        --     ( model, Cmd.none )
-
-        ItemCreated (Ok item) ->
+        ItemsReceived (Ok []) -> 
             ( model, Cmd.none )
 
-        ItemCreated (Err _) ->
+        ItemsReceived (Ok items) ->
+            ( { model | tasks = items }, Cmd.none )
+
+        ItemsReceived (Err err) ->
+            let 
+                _ = Debug.log "Error" err
+            in
             ( model, Cmd.none )
+
 
 -- View part
 
@@ -179,7 +190,7 @@ main =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( emptyModel
-    , Cmd.none
+    , getItems 
     )
     
 subscriptions : Model -> Sub Msg
@@ -191,39 +202,3 @@ newItemEncoder description =
     Json.Encode.object
         [ ( "description", Json.Encode.string description )
         ]
-
--- itemDecoder : Json.Decode.Decoder Item.Model
--- itemDecoder =
---     Json.Decode.succeed Item.Model
---         |> required "description" Json.Decode.string
---         |> required "completed" Json.Decode.bool
-
--- itemDecoder : Json.Encode.Value -> Msg
--- itemDecoder =
---     let 
---         decodedItem = Json.Decode.decodeObject
---             { description = Json.Decode.string
---             , completed = Json.Decode.bool
---             }
---     in
---         case decodedItem of
---             Ok item ->
---                 ItemCreated (Ok item)
---             Err _ ->
---                 ItemCreated (Err "Error")
-
--- itemDecoder : Json.Encode.Value -> Msg
--- itemDecoder =
---     let 
---         decodedItem = Json.Decode.decodeValue
---             (Json.Decode.object
---                 [ ( "description", Json.Decode.string )
---                 , ( "completed", Json.Decode.bool )
---                 ]
---             )
---     in
---         case decodedItem of
---             Ok item ->
---                 ItemCreated (Ok item)
---             Err _ ->
---                 ItemCreated (Err "Error")

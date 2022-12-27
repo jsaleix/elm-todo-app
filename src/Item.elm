@@ -3,8 +3,8 @@ module Item exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (class, type_, value, id, placeholder, checked, name)
 import Html.Events exposing (onInput, onClick, on, onBlur, keyCode, onDoubleClick)
-import Json.Decode as Json
-
+import Json.Decode as Decode exposing (Decoder, field, int, list, string)
+import Json.Decode.Pipeline exposing (required, optional)
 -- Model
 
 type alias Model =
@@ -12,16 +12,25 @@ type alias Model =
         description: String
         , completed: Bool
         , edits: Maybe String
-        , id: Int
+        , id: String
     }
 
-init : String -> Int -> Model
+init : String -> String -> Model
 init desc id = 
     {
         description = desc
         , completed = False
         , edits = Nothing
         , id = id
+    }
+
+emptyModel : Model
+emptyModel = 
+    {
+        description = ""
+        , completed = False
+        , edits = Nothing
+        , id = ""
     }
 
 -- Update
@@ -82,7 +91,7 @@ view model =
         description =
             Maybe.withDefault model.description model.edits
         elementId =
-            "todo-" ++ String.fromInt model.id
+            "todo-" ++ model.id
     in
         li
             [ class className ]
@@ -125,4 +134,18 @@ onFinish finishMsg keyMsg =
                 13 -> finishMsg
                 _ -> keyMsg
     in
-        on "keydown" (Json.map select keyCode)
+        on "keydown" (Decode.map select keyCode)
+
+
+itemDecoder : Decoder Model
+itemDecoder =
+    Decode.succeed Model
+        |> required "_description" string
+        |> required "_completed" Decode.bool
+        |> optional "edits" (Decode.maybe string) Nothing
+        |> required "id" string
+
+itemListDecoder : Decoder (List Model)
+itemListDecoder =
+    (list itemDecoder)
+    
