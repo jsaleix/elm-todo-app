@@ -8,6 +8,10 @@ import Html.Attributes exposing (class, style, type_, value, id, placeholder, au
 import Html.Events exposing (onInput)
 import Item
 import Task
+import Http
+import Json.Decode exposing (list, field)
+import Json.Decode.Pipeline exposing (required)
+import Json.Encode
 
 type alias Model = {
     tasks: List Item.Model
@@ -29,6 +33,11 @@ type Msg =
     | UpdateField String
     | Add
     | UpdateItem (Int, Item.Msg)
+    -- | ItemsReceived (Result Http.Error (List Item.Model))
+    | ItemCreated (Result Http.Error Item.Model)
+
+type alias Flags =
+    Json.Encode.Value
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model = 
@@ -42,6 +51,11 @@ update msg model =
 
         Add ->
             let 
+                httpCommand = Http.post
+                    { url = "http://localhost:3000/todos"
+                    , body = Http.jsonBody (newItemEncoder model.field)
+                    , expect = Http.expectString (\_ -> NoOp)
+                    }
                 description = String.trim model.field
                 newModel = 
                     if description == "" then
@@ -53,7 +67,7 @@ update msg model =
                             , tasks = model.tasks ++ [ Item.init description model.uuid ]
                         }
 
-            in ( newModel, Cmd.none )
+            in ( newModel, httpCommand )
         
         UpdateItem ( id, itemMsg ) ->
             let 
@@ -72,6 +86,18 @@ update msg model =
                         ( newModel, focusTask elementId )
                     _ ->
                         ( newModel, Cmd.none )
+
+        -- ItemsReceived (Ok items) ->
+        --     ( { model | tasks = items }, Cmd.none )
+
+        -- ItemsReceived (Err _) ->
+        --     ( model, Cmd.none )
+
+        ItemCreated (Ok item) ->
+            ( model, Cmd.none )
+
+        ItemCreated (Err _) ->
+            ( model, Cmd.none )
 
 -- View part
 
@@ -155,7 +181,49 @@ init _ =
     ( emptyModel
     , Cmd.none
     )
-
+    
 subscriptions : Model -> Sub Msg
 subscriptions _ = 
     Sub.none
+
+newItemEncoder : String -> Json.Encode.Value
+newItemEncoder description =
+    Json.Encode.object
+        [ ( "description", Json.Encode.string description )
+        ]
+
+-- itemDecoder : Json.Decode.Decoder Item.Model
+-- itemDecoder =
+--     Json.Decode.succeed Item.Model
+--         |> required "description" Json.Decode.string
+--         |> required "completed" Json.Decode.bool
+
+-- itemDecoder : Json.Encode.Value -> Msg
+-- itemDecoder =
+--     let 
+--         decodedItem = Json.Decode.decodeObject
+--             { description = Json.Decode.string
+--             , completed = Json.Decode.bool
+--             }
+--     in
+--         case decodedItem of
+--             Ok item ->
+--                 ItemCreated (Ok item)
+--             Err _ ->
+--                 ItemCreated (Err "Error")
+
+-- itemDecoder : Json.Encode.Value -> Msg
+-- itemDecoder =
+--     let 
+--         decodedItem = Json.Decode.decodeValue
+--             (Json.Decode.object
+--                 [ ( "description", Json.Decode.string )
+--                 , ( "completed", Json.Decode.bool )
+--                 ]
+--             )
+--     in
+--         case decodedItem of
+--             Ok item ->
+--                 ItemCreated (Ok item)
+--             Err _ ->
+--                 ItemCreated (Err "Error")
